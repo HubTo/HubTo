@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HubTo.WebApi/HubTo.WebApi.csproj" Id="b4b8e54a-aac3-49c0-8208-26a74cbf8980" />
+  </Folder>
+  <Folder Name="/src/Core/">
+    <Project Path="src/Core/HubTo.Core.Application/HubTo.Core.Application.csproj" />
+    <Project Path="src/Core/HubTo.Core.Domain/HubTo.Core.Domain.csproj" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/HubTo.Infrastructure.Migrations/HubTo.Infrastructure.Migrations.csproj" Id="7508679c-6e6a-4b4b-b373-3005ccf6fa10" />
+    <Project Path="src/Infrastructure/HubTo.Infrastructure.Persistence/HubTo.Infrastructure.Persistence.csproj" Id="aa19d05f-2811-4ed0-bd6a-2fe68f5d7354" />
+    <Project Path="src/Infrastructure/HubTo.Infrastructure.Plugins/HubTo.Infrastructure.Plugins.csproj" Id="fe3e3403-f44c-4918-aba4-b4cec28db746" />
+  </Folder>
+</Solution>
