@@ -8,6 +8,7 @@ internal static class MiddlewareExtensions
     {
         app.UseMiddleware<TraceIdMiddleware>();
         app.UseMiddleware<ExceptionHandlingMiddleware>();
+        app.UseMiddleware<PluginRoutingMiddleware>();
 
         return app;
     }
