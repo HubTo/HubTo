@@ -1,4 +1,4 @@
-﻿using HubTo.Core.Application.Common;
+﻿using HubTo.Core.Application.Common.Results;
 using HubTo.WebApi.Common;
 using Mediator;
 using Microsoft.AspNetCore.Mvc;

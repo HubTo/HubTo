@@ -2,5 +2,6 @@
 
 public interface IPluginLoader
 {
-    Task InitializePluginsAsync(CancellationToken ct = default);
+    Task InitializePluginsAsync(CancellationToken cancellationToken = default);
+    Task<bool> ReloadPluginAsync(CancellationToken cancellationToken = default);
 }

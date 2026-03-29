@@ -19,6 +19,7 @@ public static class ApplicationExtensions
 
         services.Configure<JwtSettings>(configuration.GetSection("Jwt"));
         services.Configure<Argon2Settings>(configuration.GetSection("Argon2"));
+        services.Configure<AdminSettings>(configuration.GetSection("Admin"));
 
         services.AddValidatorsFromAssembly(assm, includeInternalTypes: true);
 

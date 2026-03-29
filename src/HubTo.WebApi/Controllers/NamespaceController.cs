@@ -1,4 +1,4 @@
-﻿using HubTo.Core.Application.Common;
+﻿using HubTo.Core.Application.Common.Results;
 using HubTo.Core.Application.Features.Namespace.Commands.Create;
 using HubTo.WebApi.Controllers.Base;
 using Mediator;

@@ -21,13 +21,13 @@ internal class HubToAuthValidator : IHubToAuthValdiator
         _userRepository = userRepository;
     }
 
-    public async Task<HubToAuthResult> ValidateApiKeyAsync(string apiKey)
+    public async Task<HubToAuthResult> ValidateApiKeyAsync(string apiKey, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(apiKey) || apiKey.Length < 12)
             return HubToAuthResult.Failure("Invalid API key format");
 
         var prefix = apiKey.Substring(0, 12);
-        var candidates = await _apiKeyRepository.GetByPrefixAsync(prefix);
+        var candidates = await _apiKeyRepository.GetByPrefixAsync(prefix, cancellationToken);
 
         var key = candidates.FirstOrDefault(x => _argon2Helper.Verify(apiKey, x.KeyHash));
 
@@ -42,13 +42,13 @@ internal class HubToAuthValidator : IHubToAuthValdiator
         return HubToAuthResult.Success(key.UserId.ToString(), key.NamespaceId.ToString(), topPermission);
     }
 
-    public async Task<HubToAuthResult> ValidateBasicAsync(string username, string password)
+    public async Task<HubToAuthResult> ValidateBasicAsync(string username, string password, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password) || password.Length < 12)
             return HubToAuthResult.Failure("Invalid credentials");
 
         var normalizedUsername = username.Trim().ToLowerInvariant();
-        var user = await _userRepository.GetByUsernameAsync(normalizedUsername);
+        var user = await _userRepository.GetByUsernameAsync(normalizedUsername, cancellationToken);
 
         if (user is null)
         {
@@ -57,7 +57,7 @@ internal class HubToAuthValidator : IHubToAuthValdiator
         }
 
         var prefix = password.Substring(0, 12);
-        var candidates = await _apiKeyRepository.GetByPrefixAsync(prefix);
+        var candidates = await _apiKeyRepository.GetByPrefixAsync(prefix, cancellationToken);
         var key = candidates.FirstOrDefault(x => _argon2Helper.Verify(password, x.KeyHash));
 
         if (key is null || key.UserId != user.Id)

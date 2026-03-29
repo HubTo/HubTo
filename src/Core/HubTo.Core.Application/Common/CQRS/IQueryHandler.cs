@@ -1,4 +1,5 @@
-﻿using Mediator;
+﻿using HubTo.Core.Application.Common.Results;
+using Mediator;
 
 namespace HubTo.Core.Application.Common.CQRS;
 

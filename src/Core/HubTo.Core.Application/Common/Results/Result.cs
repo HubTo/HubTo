@@ -1,4 +1,4 @@
-﻿namespace HubTo.Core.Application.Common;
+﻿namespace HubTo.Core.Application.Common.Results;
 
 public class Result
 {

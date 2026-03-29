@@ -1,4 +1,4 @@
-﻿using HubTo.Core.Application.Common;
+﻿using HubTo.Core.Application.Common.Results;
 using HubTo.Core.Application.Features.Auth.Commands.Login;
 using HubTo.Core.Application.Features.Auth.Commands.Register;
 using HubTo.WebApi.Controllers.Base;

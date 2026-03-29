@@ -16,4 +16,13 @@ internal sealed class PluginRepository : Repository<PluginEntity>, IPluginReposi
             .Include(x => x.PluginSettings)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<PluginEntity?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
+    {
+        return await Query
+            .AsNoTracking()
+            .Include(x => x.PluginSettings)
+            .Where(x => x.Name == name)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 }

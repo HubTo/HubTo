@@ -1,6 +1,8 @@
-﻿using HubTo.Core.Application.Contracts.Persistence.Repositories;
+﻿using HubTo.Abstraction.Registrars;
+using HubTo.Core.Application.Contracts.Persistence.Repositories;
 using HubTo.Core.Application.Contracts.Plugins;
-using HubTo.Abstraction.Registrars;
+using HubTo.Core.Domain.Entities;
+using Microsoft.Extensions.Logging;
 using System.Reflection;
 using System.Runtime.Loader;
 
@@ -10,69 +12,123 @@ public sealed class PluginLoader : IPluginLoader
 {
     private readonly IPluginRepository _pluginRepository;
     private readonly IPluginRegistry _registry;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger<PluginLoader> _logger;
     private readonly string _pluginBaseDirectory;
 
     public PluginLoader(
         IPluginRepository pluginRepo,
-        IPluginRegistry registry)
+        IPluginRegistry registry,
+        ILoggerFactory loggerFactory,
+        ILogger<PluginLoader> logger)
     {
         _pluginRepository = pluginRepo;
         _registry = registry;
+        _loggerFactory = loggerFactory;
+        _logger = logger;
         _pluginBaseDirectory = Path.Combine(AppContext.BaseDirectory, "plugins");
     }
 
-    public async Task InitializePluginsAsync(CancellationToken ct = default)
+    public async Task InitializePluginsAsync(CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(_pluginBaseDirectory))
             Directory.CreateDirectory(_pluginBaseDirectory);
 
-        var pluginsFromDb = await _pluginRepository.GetActivePluginsWithSettingsAsync(ct);
+        var pluginsFromDb = await _pluginRepository.GetActivePluginsWithSettingsAsync(cancellationToken);
 
         foreach (var dbPlugin in pluginsFromDb)
+            await LoadAsync(dbPlugin, cancellationToken);
+    }
+
+    public async Task<bool> ReloadPluginAsync(CancellationToken cancellationToken = default)
+    {
+        _registry.SetReloading(true);
+        try
         {
-            var dllPath = Path.Combine(_pluginBaseDirectory, dbPlugin.AssemblyName);
-
-            if (!File.Exists(dllPath))
+            foreach (var plugin in _registry.AllPlugins.ToList())
             {
-                Console.WriteLine($"[INFO] Plugin file is not recovered: {dbPlugin.AssemblyName}");
-                continue;
+                await plugin.ShutdownAsync(cancellationToken);
+                _registry.TryUnregister(plugin.Name);
             }
 
-            try
+            var pluginsFromDb = await _pluginRepository.GetActivePluginsWithSettingsAsync(cancellationToken);
+            var results = new List<bool>();
+
+            foreach (var dbPlugin in pluginsFromDb)
+                results.Add(await LoadAsync(dbPlugin, cancellationToken));
+
+            return results.All(r => r);
+        }
+        finally
+        {
+            _registry.SetReloading(false);
+        }
+    }
+
+    private async Task<bool> LoadAsync(PluginEntity dbPlugin, CancellationToken cancellationToken)
+    {
+        var pluginFolder = Path.Combine(_pluginBaseDirectory, dbPlugin.Name);
+        var dllPath = Path.Combine(pluginFolder, dbPlugin.AssemblyName);
+
+        if (!File.Exists(dllPath))
+        {
+            _logger.LogWarning("Plugin DLL not found, skipping. Plugin: {PluginName}, Path: {DllPath}", dbPlugin.Name, dllPath);
+            return false;
+        }
+
+        try
+        {
+            var loadContext = new AssemblyLoadContext(dbPlugin.Name, isCollectible: true);
+
+            Func<AssemblyLoadContext, AssemblyName, Assembly?> resolver = (context, assemblyName) =>
             {
-                var loadContext = new AssemblyLoadContext(dbPlugin.Name, isCollectible: true);
+                if (assemblyName.Name == "HubTo.Abstraction") return null;
+                var expectedPath = Path.Combine(pluginFolder, $"{assemblyName.Name}.dll");
+                if (!File.Exists(expectedPath)) return null;
 
-                loadContext.Resolving += (context, assemblyName) =>
-                {
-                    var expectedPath = Path.Combine(_pluginBaseDirectory, $"{assemblyName.Name}.dll");
-                    if (File.Exists(expectedPath))
-                    {
-                        return context.LoadFromAssemblyPath(expectedPath);
-                    }
-                    return null;
-                };
+                using var depStream = new MemoryStream(File.ReadAllBytes(expectedPath));
+                return context.LoadFromStream(depStream);
+            };
 
-                var assembly = loadContext.LoadFromAssemblyPath(dllPath);
+            loadContext.Resolving += resolver;
 
-                var pluginType = assembly.GetTypes()
-                    .FirstOrDefault(t => typeof(IHubToPlugin).IsAssignableFrom(t)
-                                         && !t.IsInterface
-                                         && !t.IsAbstract);
+            using var stream = new MemoryStream(File.ReadAllBytes(dllPath));
+            var assembly = loadContext.LoadFromStream(stream);
 
-                if (pluginType != null && Activator.CreateInstance(pluginType) is IHubToPlugin instance)
-                {
-                    var settings = dbPlugin.PluginSettings.ToDictionary(s => s.Key, s => s.Value);
+            var pluginType = assembly.GetTypes()
+                .FirstOrDefault(t => typeof(IHubToPlugin).IsAssignableFrom(t)
+                                     && !t.IsInterface && !t.IsAbstract);
 
-                    await instance.InitializeAsync(settings);
-
-                    _registry.Register(instance);
-                }
-            }
-            catch (Exception ex)
+            if (pluginType is null)
             {
-                var message = ex is ReflectionTypeLoadException re ? string.Join(", ", re.LoaderExceptions.Select(e => e?.Message)) : ex.Message;
-                Console.WriteLine($"[Error] {dbPlugin.Name} can not loaded: {message}");
+                loadContext.Resolving -= resolver;
+                loadContext.Unload();
+                _logger.LogWarning("No valid IHubToPlugin found. Plugin: {PluginName}", dbPlugin.Name);
+                return false;
             }
+
+            if (Activator.CreateInstance(pluginType) is not IHubToPlugin instance)
+            {
+                loadContext.Resolving -= resolver;
+                loadContext.Unload();
+                _logger.LogWarning("Failed to create instance. Plugin: {PluginName}", dbPlugin.Name);
+                return false;
+            }
+
+            var settings = dbPlugin.PluginSettings.ToDictionary(s => s.Key, s => s.Value);
+            var coreLogger = _loggerFactory.CreateLogger($"Plugin:{dbPlugin.Name}");
+            var adapter = new HubToLoggerAdapter(coreLogger);
+
+            await instance.InitializeAsync(settings, adapter, cancellationToken);
+            _registry.Register(instance, loadContext, resolver);
+
+            _logger.LogInformation("Plugin loaded successfully. Plugin: {PluginName}", dbPlugin.Name);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load plugin. Plugin: {PluginName}", dbPlugin.Name);
+            return false;
         }
     }
 }
