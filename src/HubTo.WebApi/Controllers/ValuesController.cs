@@ -1,4 +1,4 @@
-﻿using HubTo.Abstraction.Models;
+﻿using HubTo.Abstraction.Models.Storage;
 using HubTo.Abstraction.Registrars;
 using HubTo.Core.Application.Contracts.Plugins;
 using Microsoft.AspNetCore.Mvc;

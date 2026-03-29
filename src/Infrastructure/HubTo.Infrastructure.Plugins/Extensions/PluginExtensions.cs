@@ -11,7 +11,7 @@ public static class PluginExtensions
     public static IServiceCollection AddPluginsServices(this IServiceCollection services)
     {
         services.AddSingleton<IPluginRegistry, PluginRegistry>();
-        services.AddScoped<IHubToAuthValdiator, HubToAuthValidator>();
+        services.AddScoped<IHubToAuthValidator, HubToAuthValidator>();
 
         services.AddScoped<IPluginLoader, PluginLoader>();
 
